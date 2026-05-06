@@ -1,0 +1,1961 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chronolocation Calculator · Signal &amp; Shadow</title>
+<meta name="description" content="Verify date, time, and location of media using solar position. Calculate sun altitude, azimuth, sunrise, sunset, and shadow length. Generates a citable chronolocation report under SIG-TLS-002.">
+<meta property="og:title" content="Chronolocation Calculator · Signal &amp; Shadow">
+<meta property="og:description" content="Verify date, time, and location of media using solar position. Generates a citable chronolocation report under SIG-TLS-002.">
+<meta property="og:type" content="website">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<link href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet" crossorigin="anonymous">
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous" defer></script>
+
+<style>
+  :root {
+    /* Surface */
+    --bg: #0A0E14;
+    --bg-elev: #0F141C;
+    --bg-card: #131923;
+    --bg-card-hover: #18202D;
+    --line: #1F2937;
+    --line-bright: #2D3B4F;
+
+    /* Ink */
+    --ink: #E8EBF0;
+    --ink-soft: #B0B8C5;
+    --ink-faint: #6B7888;
+    --ink-mute: #4A5564;
+
+    /* Brand */
+    --navy: #2A1B3D;
+    --navy-glow: rgba(42, 27, 61, 0.4);
+    --teal: #32BB93;
+    --teal-bright: #4DD9AE;
+    --teal-deep: #1F8F6E;
+    --teal-tint: rgba(50, 187, 147, 0.12);
+    --teal-glow: rgba(50, 187, 147, 0.15);
+
+    /* Status */
+    --amber: #E89D3C;
+    --rust: #C24914;
+    --vermillion: #D14242;
+
+    /* Type */
+    --sans: 'Geist', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, Menlo, 'Courier New', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  a { color: inherit; text-decoration: none; transition: color 0.15s; }
+  a:hover { color: var(--teal); }
+
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 0 32px; }
+
+  /* ============ STATUS BAR ============ */
+  .status-bar {
+    background: var(--bg-elev);
+    border-bottom: 0.5px solid var(--line);
+    padding: 10px 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .status-bar .row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 24px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+  }
+  .status-id { color: var(--teal); font-weight: 600; }
+  .status-meta { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .dot-sep { color: var(--ink-mute); }
+  .status-pulse {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--teal);
+  }
+  .pulse-dot {
+    width: 6px;
+    height: 6px;
+    background: var(--teal);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--teal);
+    animation: pulse 2.4s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* ============ HERO ============ */
+  .hero {
+    padding: 64px 0 48px;
+    border-bottom: 0.5px solid var(--line);
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 60% 40% at 80% 20%, var(--teal-glow) 0%, transparent 50%),
+      radial-gradient(ellipse 40% 60% at 0% 100%, var(--navy-glow) 0%, transparent 60%);
+    pointer-events: none;
+  }
+  .hero-inner { position: relative; }
+  .hero-eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--teal);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .hero-eyebrow::before {
+    content: '';
+    width: 24px;
+    height: 1px;
+    background: var(--teal);
+  }
+  .hero-headline {
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: clamp(36px, 5vw, 56px);
+    line-height: 1.05;
+    letter-spacing: -0.04em;
+    color: var(--ink);
+    max-width: 900px;
+    margin-bottom: 24px;
+  }
+  .hero-headline em {
+    font-style: normal;
+    color: var(--teal);
+    font-weight: 600;
+  }
+  .hero-deck {
+    font-size: 17px;
+    line-height: 1.55;
+    color: var(--ink-soft);
+    max-width: 720px;
+    margin-bottom: 36px;
+  }
+
+  .counters {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border-top: 0.5px solid var(--line);
+    border-bottom: 0.5px solid var(--line);
+  }
+  .counter {
+    padding: 20px 24px;
+    border-right: 0.5px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .counter:last-child { border-right: none; }
+  .counter .num {
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 28px;
+    color: var(--teal);
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .counter .lbl {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  /* ============ LAYOUT ============ */
+  .layout {
+    display: grid;
+    grid-template-columns: 460px 1fr;
+    gap: 32px;
+    padding: 40px 0 64px;
+    align-items: start;
+  }
+
+  .col-form { position: sticky; top: 60px; align-self: start; }
+
+  /* ============ SECTION HEAD ============ */
+  .section-head {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 0.5px solid var(--line);
+  }
+  .section-tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--teal);
+    font-weight: 600;
+  }
+  .section-heading {
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 18px;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+  .section-meta {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  /* ============ PANELS ============ */
+  .panel {
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    margin-bottom: 12px;
+  }
+  .panel-head {
+    padding: 12px 18px;
+    border-bottom: 0.5px solid var(--line);
+    background: var(--bg-elev);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .panel-head .name {
+    color: var(--teal);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .panel-head .name::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    background: var(--teal);
+    box-shadow: 0 0 6px var(--teal);
+  }
+  .panel-head .meta {
+    color: var(--ink-faint);
+    font-weight: 400;
+  }
+  .panel-body { padding: 18px; }
+
+  /* ============ FIELDS ============ */
+  .field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .field-row:last-child { margin-bottom: 0; }
+  .field-row.single { grid-template-columns: 1fr; }
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .field-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    font-weight: 500;
+  }
+  .field-hint {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-faint);
+    line-height: 1.4;
+  }
+  input[type="number"], input[type="date"], input[type="time"], input[type="text"] {
+    background: var(--bg);
+    border: 1px solid var(--line-bright);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 10px 12px;
+    width: 100%;
+    transition: border-color 0.15s;
+    -webkit-appearance: none;
+    appearance: none;
+    border-radius: 0;
+  }
+  input:focus {
+    outline: none;
+    border-color: var(--teal);
+  }
+  input::placeholder { color: var(--ink-mute); }
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="time"]::-webkit-calendar-picker-indicator {
+    filter: invert(1) opacity(0.5);
+    cursor: pointer;
+  }
+
+  /* ============ MAP PICKER ============ */
+  #pickerMap {
+    width: 100%;
+    height: 280px;
+    border: 1px solid var(--line);
+    margin-bottom: 8px;
+    background: var(--bg);
+  }
+  .map-hint {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-faint);
+    margin-bottom: 12px;
+    letter-spacing: 0.04em;
+  }
+  .map-hint .accent { color: var(--teal); }
+  /* Leaflet overrides, sit in the dark surface */
+  .leaflet-container {
+    background: var(--bg) !important;
+    font-family: var(--mono) !important;
+    font-size: 11px !important;
+    border-radius: 0 !important;
+  }
+  /* Tile filter: turn OSM's light tiles into a dark, desaturated map matching the surface */
+  .leaflet-tile-pane {
+    filter: invert(0.92) hue-rotate(180deg) saturate(0.55) brightness(0.95) contrast(0.92);
+  }
+  .leaflet-control-attribution {
+    background: rgba(15, 20, 28, 0.9) !important;
+    color: var(--ink-faint) !important;
+    font-family: var(--mono) !important;
+    font-size: 9px !important;
+    letter-spacing: 0.04em !important;
+    border-radius: 0 !important;
+    padding: 2px 6px !important;
+  }
+  .leaflet-control-attribution a {
+    color: var(--ink-soft) !important;
+  }
+  .leaflet-control-attribution a:hover {
+    color: var(--teal) !important;
+  }
+  .leaflet-bar {
+    border-radius: 0 !important;
+    border: 1px solid var(--line-bright) !important;
+    box-shadow: none !important;
+  }
+  .leaflet-bar a {
+    background: var(--bg-card) !important;
+    color: var(--ink-soft) !important;
+    border-bottom: 1px solid var(--line) !important;
+    border-radius: 0 !important;
+    transition: all 0.15s !important;
+  }
+  .leaflet-bar a:hover {
+    background: var(--bg-card-hover) !important;
+    color: var(--teal) !important;
+  }
+  .leaflet-bar a:last-child {
+    border-bottom: none !important;
+  }
+  .ss-pin {
+    width: 16px;
+    height: 16px;
+    background: var(--teal);
+    border: 2px solid var(--bg);
+    box-shadow: 0 0 12px rgba(50, 187, 147, 0.6);
+    cursor: grab;
+  }
+  .ss-pin.locked { cursor: default; }
+  .ss-sun {
+    width: 14px;
+    height: 14px;
+    background: var(--amber);
+    border-radius: 50%;
+    box-shadow: 0 0 16px rgba(232, 157, 60, 0.8);
+  }
+
+  /* ============ TOGGLE ============ */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    margin-bottom: 12px;
+    user-select: none;
+  }
+  .toggle-track {
+    position: relative;
+    width: 32px;
+    height: 16px;
+    background: var(--line-bright);
+    transition: background 0.15s;
+    flex-shrink: 0;
+  }
+  .toggle-track.on { background: var(--teal); }
+  .toggle-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 12px;
+    height: 12px;
+    background: var(--ink);
+    transition: transform 0.15s;
+  }
+  .toggle-track.on .toggle-thumb { transform: translateX(16px); background: var(--bg); }
+  .toggle-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    font-weight: 500;
+  }
+
+  /* ============ BUTTONS ============ */
+  .btn-primary {
+    width: 100%;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    padding: 14px;
+    background: var(--teal);
+    color: var(--bg);
+    font-weight: 600;
+    border: 1px solid var(--teal);
+    cursor: pointer;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--teal-bright);
+    border-color: var(--teal-bright);
+    box-shadow: 0 0 24px var(--teal-glow);
+  }
+  .btn-primary:disabled {
+    background: var(--line);
+    border-color: var(--line);
+    color: var(--ink-mute);
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  .btn-ghost {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 10px 16px;
+    background: transparent;
+    color: var(--ink-soft);
+    font-weight: 500;
+    border: 1px solid var(--line-bright);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-ghost:hover {
+    border-color: var(--teal);
+    color: var(--teal);
+  }
+
+  /* ============ ERROR ============ */
+  .error-msg {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--vermillion);
+    padding: 12px 14px;
+    background: rgba(209, 66, 66, 0.08);
+    border: 1px solid rgba(209, 66, 66, 0.4);
+    margin-bottom: 12px;
+    letter-spacing: 0.04em;
+  }
+
+  /* ============ RESULTS ============ */
+  .results-empty {
+    background: var(--bg-card);
+    border: 1px dashed var(--line-bright);
+    padding: 80px 32px;
+    text-align: left;
+  }
+  .results-empty .e-tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--teal);
+    margin-bottom: 16px;
+  }
+  .results-empty .e-title {
+    font-family: var(--sans);
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    margin-bottom: 12px;
+    max-width: 480px;
+    line-height: 1.2;
+  }
+  .results-empty .e-desc {
+    font-size: 14px;
+    color: var(--ink-soft);
+    line-height: 1.55;
+    max-width: 520px;
+  }
+
+  .results { animation: fadeIn 0.4s ease; }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Metrics */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border: 1px solid var(--line);
+    margin-bottom: 16px;
+  }
+  .metric-cell {
+    padding: 18px 16px;
+    border-right: 0.5px solid var(--line);
+    background: var(--bg-card);
+  }
+  .metric-cell:last-child { border-right: none; }
+  .metric-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 8px;
+  }
+  .metric-value {
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 22px;
+    color: var(--teal);
+    line-height: 1;
+    letter-spacing: -0.02em;
+    margin-bottom: 6px;
+  }
+  .metric-value.compact { font-family: var(--mono); font-weight: 500; font-size: 15px; }
+  .metric-sub {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-soft);
+    letter-spacing: 0.04em;
+  }
+
+  /* Result panel (visualisations + verification) */
+  .result-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    margin-bottom: 12px;
+  }
+  .result-panel-head {
+    padding: 12px 18px;
+    border-bottom: 0.5px solid var(--line);
+    background: var(--bg-elev);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .result-panel-head .name {
+    color: var(--teal);
+    font-weight: 600;
+  }
+  .result-panel-head .meta {
+    color: var(--ink-faint);
+    font-weight: 400;
+  }
+  .result-panel-body { padding: 20px; }
+
+  /* SVG diagrams */
+  .diagram-svg { width: 100%; display: block; }
+
+  /* Result map */
+  #resultMap {
+    width: 100%;
+    height: 240px;
+    background: var(--bg);
+  }
+
+  /* Shadow verification grid */
+  .shadow-verify-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    border-top: 0.5px solid var(--line);
+  }
+  .shadow-verify-cell {
+    padding: 16px 18px;
+    border-right: 0.5px solid var(--line);
+  }
+  .shadow-verify-cell:last-child { border-right: none; }
+  .shadow-verify-cell .l {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 6px;
+  }
+  .shadow-verify-cell .v {
+    font-family: var(--mono);
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--ink);
+  }
+  .shadow-verify-cell .v.match { color: var(--teal); }
+  .shadow-verify-cell .v.mismatch { color: var(--vermillion); }
+
+  /* Pills (used for confidence and verification status) */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 600;
+    padding: 4px 10px;
+    border: 1px solid var(--line-bright);
+    color: var(--ink-soft);
+    background: transparent;
+  }
+  .pill.high {
+    background: var(--teal-tint);
+    border-color: var(--teal-deep);
+    color: var(--teal);
+  }
+  .pill.high::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    background: var(--teal);
+    border-radius: 50%;
+    box-shadow: 0 0 6px var(--teal);
+  }
+  .pill.mid {
+    background: rgba(232, 157, 60, 0.1);
+    border-color: rgba(232, 157, 60, 0.4);
+    color: var(--amber);
+  }
+  .pill.mid::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    background: var(--amber);
+    border-radius: 50%;
+  }
+  .pill.low {
+    background: rgba(209, 66, 66, 0.1);
+    border-color: rgba(209, 66, 66, 0.4);
+    color: var(--vermillion);
+  }
+  .pill.low::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    background: var(--vermillion);
+    border-radius: 50%;
+  }
+
+  /* Report (mono dossier output) */
+  .report-body {
+    padding: 20px 22px;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--ink-soft);
+    white-space: pre-wrap;
+    overflow-x: auto;
+  }
+  .report-body .key { color: var(--ink-faint); }
+  .report-body .val { color: var(--teal); }
+  .report-body .formula { color: var(--amber); font-size: 11.5px; }
+  .report-body .hr { color: var(--line-bright); }
+
+  .copy-btn {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    background: transparent;
+    border: 1px solid var(--line-bright);
+    color: var(--ink-soft);
+    padding: 5px 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-weight: 500;
+  }
+  .copy-btn:hover {
+    border-color: var(--teal);
+    color: var(--teal);
+  }
+  .copy-btn.copied {
+    color: var(--teal);
+    border-color: var(--teal-deep);
+    background: var(--teal-tint);
+  }
+
+  .confidence-block {
+    padding: 16px 22px;
+    border-top: 0.5px solid var(--line);
+    background: var(--bg-elev);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .confidence-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .confidence-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .conf-notes {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-soft);
+    line-height: 1.5;
+  }
+  .conf-note {
+    padding-left: 14px;
+    position: relative;
+  }
+  .conf-note::before {
+    content: '›';
+    position: absolute;
+    left: 0;
+    color: var(--teal);
+  }
+
+  .reset-row {
+    margin-top: 16px;
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+
+  /* ============ FOOTER ============ */
+  .page-foot {
+    border-top: 0.5px solid var(--line);
+    padding: 32px 0;
+    background: var(--bg-elev);
+  }
+  .foot-line {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    align-items: center;
+  }
+  .foot-line .accent { color: var(--teal); font-weight: 600; }
+  .foot-line .sep { color: var(--ink-mute); }
+  .foot-line a:hover { color: var(--teal); }
+
+  /* ============ RESPONSIVE ============ */
+  @media (max-width: 900px) {
+    .wrap { padding: 0 16px; }
+    .layout { grid-template-columns: 1fr; gap: 24px; padding: 24px 0 48px; }
+    .col-form { position: static; }
+    .counters { grid-template-columns: repeat(2, 1fr); }
+    .counter { border-right: none; border-bottom: 0.5px solid var(--line); }
+    .counter:nth-child(2n) { border-right: none; }
+    .counter:nth-child(2n+1) { border-right: 0.5px solid var(--line); }
+    .counter:nth-last-child(-n+2) { border-bottom: none; }
+    .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+    .metric-cell:nth-child(2n) { border-right: none; }
+    .metric-cell:nth-child(-n+2) { border-bottom: 0.5px solid var(--line); }
+    .shadow-verify-grid { grid-template-columns: 1fr; }
+    .shadow-verify-cell { border-right: none; border-bottom: 0.5px solid var(--line); }
+    .shadow-verify-cell:last-child { border-bottom: none; }
+    .status-bar .row { grid-template-columns: 1fr; gap: 6px; }
+    .hero { padding: 40px 0 32px; }
+    .section-head { grid-template-columns: 1fr; gap: 8px; }
+  }
+  @media (max-width: 600px) {
+    .field-row { grid-template-columns: 1fr; }
+    .counters { grid-template-columns: 1fr; }
+    .counter { border-right: none !important; border-bottom: 0.5px solid var(--line); }
+    .counter:last-child { border-bottom: none; }
+    .metrics-grid { grid-template-columns: 1fr; }
+    .metric-cell { border-right: none; border-bottom: 0.5px solid var(--line); }
+    .metric-cell:last-child { border-bottom: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ STATUS BAR ============ -->
+<div class="status-bar">
+  <div class="wrap row">
+    <div class="status-id">[ S&amp;S / OPS ]</div>
+    <div class="status-meta">
+      <span>SIG-TLS-002</span>
+      <span class="dot-sep">·</span>
+      <span>v0.1</span>
+      <span class="dot-sep">·</span>
+      <span id="status-verified">Verified 2026-05-06</span>
+      <span class="dot-sep">·</span>
+      <span>by DB</span>
+    </div>
+    <div class="status-pulse">
+      <span class="pulse-dot"></span>
+      <span>LIVE</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============ HERO ============ -->
+<header class="hero">
+  <div class="wrap hero-inner">
+    <div class="hero-eyebrow">
+      <span>SIG-TLS-002</span>
+      <span style="color: var(--ink-mute);">/</span>
+      <span>Chronolocation Calculator</span>
+    </div>
+    <h1 class="hero-headline">
+      The sun is a witness. <em>Make it testify.</em>
+    </h1>
+    <p class="hero-deck">
+      Verify the date, time, and location of a still image or video using solar position. Enter coordinates, date, and time. Optionally measure a shadow. Returns sun altitude, azimuth, sunrise, sunset, and a citable chronolocation report.
+    </p>
+
+    <div class="counters">
+      <div class="counter">
+        <span class="num">±0.1°</span>
+        <span class="lbl">Solar position accuracy</span>
+      </div>
+      <div class="counter">
+        <span class="num">15%</span>
+        <span class="lbl">Shadow tolerance</span>
+      </div>
+      <div class="counter">
+        <span class="num">SS-DOSSIER</span>
+        <span class="lbl">Report standard</span>
+      </div>
+      <div class="counter">
+        <span class="num">v0.1</span>
+        <span class="lbl">Tool version</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ============ MAIN LAYOUT ============ -->
+<main class="wrap layout">
+
+  <!-- LEFT: FORM -->
+  <section class="col-form">
+    <div class="section-head">
+      <span class="section-tag">Inputs · 01</span>
+      <span class="section-heading">Set the parameters</span>
+      <span class="section-meta">All fields required</span>
+    </div>
+
+    <div id="errorSlot"></div>
+
+    <!-- Location panel -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="name">Location</span>
+        <span class="meta">WGS-84 decimal</span>
+      </div>
+      <div class="panel-body">
+
+        <div class="map-hint">
+          Click the map to set a pin. Drag the pin to refine. <span class="accent">Or type coordinates below.</span>
+        </div>
+
+        <div id="pickerMap"></div>
+
+        <div class="field-row">
+          <div class="field">
+            <label class="field-label">Latitude</label>
+            <input type="number" id="latInput" step="0.000001" min="-90" max="90" placeholder="48.858844">
+          </div>
+          <div class="field">
+            <label class="field-label">Longitude</label>
+            <input type="number" id="lngInput" step="0.000001" min="-180" max="180" placeholder="2.294351">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Date and time panel -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="name">Date and time</span>
+        <span class="meta">ISO 8601</span>
+      </div>
+      <div class="panel-body">
+        <div class="field-row">
+          <div class="field">
+            <label class="field-label">Date</label>
+            <input type="date" id="dateInput">
+          </div>
+          <div class="field">
+            <label class="field-label">Time</label>
+            <input type="time" id="timeInput" value="12:00">
+          </div>
+        </div>
+        <div class="field-row single">
+          <div class="field">
+            <label class="field-label">UTC offset (hours)</label>
+            <div class="field-hint">Enter the local UTC offset if the time above is local. Example: +2 for CEST, -5 for EST. Leave 0 if the time is already in UTC.</div>
+            <input type="number" id="tzInput" step="0.5" min="-12" max="14" value="0">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Shadow panel -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="name">Shadow verification</span>
+        <span class="meta">Optional</span>
+      </div>
+      <div class="panel-body">
+        <div class="toggle-row" id="shadowToggle">
+          <div class="toggle-track" id="shadowTrack">
+            <div class="toggle-thumb"></div>
+          </div>
+          <span class="toggle-label">Include shadow-length check</span>
+        </div>
+        <div id="shadowFields" style="display: none;">
+          <div class="field-row">
+            <div class="field">
+              <label class="field-label">Object height (m)</label>
+              <div class="field-hint">Vertical height of the object casting the shadow.</div>
+              <input type="number" id="objHeightInput" step="0.01" min="0" placeholder="1.80">
+            </div>
+            <div class="field">
+              <label class="field-label">Shadow length (m)</label>
+              <div class="field-hint">Measured shadow on the ground.</div>
+              <input type="number" id="shadowLenInput" step="0.01" min="0" placeholder="2.40">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-primary" id="calcBtn" disabled>
+      Calculate sun position →
+    </button>
+  </section>
+
+  <!-- RIGHT: RESULTS -->
+  <section class="col-results">
+    <div class="section-head">
+      <span class="section-tag">Output · 02</span>
+      <span class="section-heading">Solar position and verification</span>
+      <span class="section-meta" id="resultMeta">Awaiting input</span>
+    </div>
+
+    <div id="resultsSlot">
+      <div class="results-empty">
+        <div class="e-tag">Standby</div>
+        <div class="e-title">Set coordinates and a moment in time. The sun will tell you the rest.</div>
+        <div class="e-desc">Once the form on the left is filled, this panel returns altitude, azimuth, sunrise and sunset, a sun-position diagram, a 24-hour solar arc, the analysed location, and a copy-ready dossier report.</div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ============ FOOTER ============ -->
+<footer class="page-foot">
+  <div class="wrap foot-line">
+    <span class="accent">[ S&amp;S / OPS ]</span>
+    <span class="sep">·</span>
+    <span>SIG-TLS-002 v0.1</span>
+    <span class="sep">·</span>
+    <span>Verified 2026-05-06 by DB</span>
+    <span class="sep">·</span>
+    <span>Algorithm: NOAA / Jean Meeus solar position</span>
+    <span class="sep">·</span>
+    <span>LST-001 v1.0.3</span>
+    <span class="sep">·</span>
+    <span>© 2026 <a href="https://signalandshadow.io">Signal &amp; Shadow</a>, Versoix Geneva</span>
+  </div>
+</footer>
+
+<script>
+/* =====================================================================
+   SIG-TLS-002 · CHRONOLOCATION CALCULATOR
+   Solar position math: Jean Meeus, "Astronomical Algorithms" 2nd ed.
+   Tolerances: altitude/azimuth ±0.1°, shadow check 15%.
+   ===================================================================== */
+
+const state = {
+  lat: null,
+  lng: null,
+  date: new Date().toISOString().split('T')[0],
+  time: '12:00',
+  timezone: 0,
+  shadowLength: '',
+  objectHeight: '',
+  includeShadow: false,
+  results: null,
+  error: null,
+};
+
+const els = {
+  latInput: document.getElementById('latInput'),
+  lngInput: document.getElementById('lngInput'),
+  dateInput: document.getElementById('dateInput'),
+  timeInput: document.getElementById('timeInput'),
+  tzInput: document.getElementById('tzInput'),
+  objHeightInput: document.getElementById('objHeightInput'),
+  shadowLenInput: document.getElementById('shadowLenInput'),
+  shadowToggle: document.getElementById('shadowToggle'),
+  shadowTrack: document.getElementById('shadowTrack'),
+  shadowFields: document.getElementById('shadowFields'),
+  calcBtn: document.getElementById('calcBtn'),
+  errorSlot: document.getElementById('errorSlot'),
+  resultsSlot: document.getElementById('resultsSlot'),
+  resultMeta: document.getElementById('resultMeta'),
+};
+
+els.dateInput.value = state.date;
+
+/* ===== MAP PICKER ===== */
+let pickerMap = null;
+let pickerMarker = null;
+let resultMap = null;
+
+function initPickerMap() {
+  if (typeof L === 'undefined') {
+    showMapFallback('pickerMap', 'MAP LIBRARY UNAVAILABLE', 'Tile server or script CDN blocked. Type coordinates manually below; the calculator runs without the map.');
+    return;
+  }
+  try {
+    pickerMap = L.map('pickerMap', {
+      center: [46.2044, 6.1432], // Geneva
+      zoom: 2,
+      worldCopyJump: true,
+      zoomControl: true,
+      attributionControl: true
+    });
+
+    // Primary: OpenStreetMap standard tiles (most reliable, no hotlink restrictions, no key)
+    // Note: this gives a lighter map than the dark CARTO style. Dark style is preferred but
+    // CARTO has been intermittently blocking hotlinks from sandboxed origins.
+    const tileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap contributors',
+      crossOrigin: true
+    });
+
+    let tileLoadCount = 0;
+    let tileErrorCount = 0;
+    let tileFallbackShown = false;
+    tileLayer.on('tileload', () => {
+      tileLoadCount++;
+      if (tileLoadCount === 1) console.log('[SIG-TLS-002] First picker tile loaded.');
+    });
+    tileLayer.on('tileerror', (e) => {
+      tileErrorCount++;
+      if (tileErrorCount <= 3) {
+        console.error('[SIG-TLS-002] Picker tile error:', e.tile && e.tile.src);
+      }
+      // If 5+ tiles fail and none have loaded, show the user a fallback notice
+      // (network or ad-blocker is blocking OSM)
+      if (tileErrorCount >= 5 && tileLoadCount === 0 && !tileFallbackShown) {
+        tileFallbackShown = true;
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position: absolute; inset: 0; z-index: 500; background: rgba(10, 14, 20, 0.92); display: flex; align-items: center; justify-content: center; padding: 24px; pointer-events: none;';
+        overlay.innerHTML = '<div style="font-family: var(--mono); font-size: 11px; color: var(--amber); letter-spacing: 0.04em; line-height: 1.6; text-transform: uppercase; text-align: center; max-width: 360px;">TILE SERVER UNREACHABLE<br><span style="color: var(--ink-soft); font-size: 10px; text-transform: none; letter-spacing: 0.02em;">Map tiles blocked by network or ad-blocker. Type coordinates manually below; the calculator runs without the map.</span></div>';
+        document.getElementById('pickerMap').appendChild(overlay);
+      }
+    });
+
+    tileLayer.addTo(pickerMap);
+
+    pickerMap.on('click', (e) => {
+      setPin(e.latlng.lat, e.latlng.lng);
+    });
+
+    // Defensive: if the container had 0 size at init, force a redraw once layout settles
+    setTimeout(() => { if (pickerMap) pickerMap.invalidateSize(); }, 100);
+    setTimeout(() => { if (pickerMap) pickerMap.invalidateSize(); }, 500);
+  } catch (err) {
+    console.error('[SIG-TLS-002] Picker map init failed:', err);
+    pickerMap = null;
+    showMapFallback('pickerMap', 'MAP INIT FAILED', 'Could not start the map (' + (err.message || 'unknown error') + '). Type coordinates manually; the calculator still runs.');
+  }
+}
+
+function showMapFallback(containerId, title, body) {
+  const c = document.getElementById(containerId);
+  if (!c) return;
+  c.style.height = 'auto';
+  c.style.padding = '20px';
+  c.style.background = 'var(--bg)';
+  c.style.borderColor = 'var(--line-bright)';
+  c.innerHTML = '<div style="font-family: var(--mono); font-size: 11px; color: var(--amber); letter-spacing: 0.04em; line-height: 1.6; text-transform: uppercase;">' + title + '<br><span style="color: var(--ink-soft); font-size: 10px; text-transform: none;">' + body + '</span></div>';
+}
+
+function setPin(lat, lng) {
+  state.lat = lat;
+  state.lng = lng;
+  els.latInput.value = lat.toFixed(6);
+  els.lngInput.value = lng.toFixed(6);
+
+  if (!pickerMap) { refreshCalc(); return; }
+
+  if (!pickerMarker) {
+    const icon = L.divIcon({
+      className: '',
+      html: '<div class="ss-pin"></div>',
+      iconSize: [16, 16],
+      iconAnchor: [8, 8]
+    });
+    pickerMarker = L.marker([lat, lng], { icon, draggable: true }).addTo(pickerMap);
+    pickerMarker.on('dragend', () => {
+      const ll = pickerMarker.getLatLng();
+      state.lat = ll.lat;
+      state.lng = ll.lng;
+      els.latInput.value = ll.lat.toFixed(6);
+      els.lngInput.value = ll.lng.toFixed(6);
+      refreshCalc();
+    });
+  } else {
+    pickerMarker.setLatLng([lat, lng]);
+  }
+  refreshCalc();
+}
+
+/* ===== INPUT HANDLERS ===== */
+els.latInput.addEventListener('input', (e) => {
+  const v = parseFloat(e.target.value);
+  if (!isNaN(v) && v >= -90 && v <= 90) {
+    state.lat = v;
+    if (state.lng !== null && pickerMap) {
+      if (pickerMarker) pickerMarker.setLatLng([v, state.lng]);
+      else setPin(v, state.lng);
+      pickerMap.setView([v, state.lng], Math.max(pickerMap.getZoom(), 8));
+    }
+  } else {
+    state.lat = null;
+  }
+  refreshCalc();
+});
+
+els.lngInput.addEventListener('input', (e) => {
+  const v = parseFloat(e.target.value);
+  if (!isNaN(v) && v >= -180 && v <= 180) {
+    state.lng = v;
+    if (state.lat !== null && pickerMap) {
+      if (pickerMarker) pickerMarker.setLatLng([state.lat, v]);
+      else setPin(state.lat, v);
+      pickerMap.setView([state.lat, v], Math.max(pickerMap.getZoom(), 8));
+    }
+  } else {
+    state.lng = null;
+  }
+  refreshCalc();
+});
+
+els.dateInput.addEventListener('input', (e) => { state.date = e.target.value; refreshCalc(); });
+els.timeInput.addEventListener('input', (e) => { state.time = e.target.value; refreshCalc(); });
+els.tzInput.addEventListener('input', (e) => { state.timezone = parseFloat(e.target.value) || 0; refreshCalc(); });
+els.objHeightInput.addEventListener('input', (e) => { state.objectHeight = e.target.value; });
+els.shadowLenInput.addEventListener('input', (e) => { state.shadowLength = e.target.value; });
+
+els.shadowToggle.addEventListener('click', () => {
+  state.includeShadow = !state.includeShadow;
+  els.shadowTrack.classList.toggle('on', state.includeShadow);
+  els.shadowFields.style.display = state.includeShadow ? 'block' : 'none';
+});
+
+els.calcBtn.addEventListener('click', calculate);
+
+function refreshCalc() {
+  const ok = state.lat !== null && state.lng !== null && state.date && state.time;
+  els.calcBtn.disabled = !ok;
+}
+
+/* ===== SOLAR MATH (NOAA / Meeus) ===== */
+function toRad(d) { return d * Math.PI / 180; }
+function toDeg(r) { return r * 180 / Math.PI; }
+
+function calcSunPosition(lat, lng, date) {
+  const D = (date - new Date(Date.UTC(2000, 0, 1, 12))) / 86400000;
+  const g = toRad((357.529 + 0.98560028 * D) % 360);
+  const q = (280.459 + 0.98564736 * D) % 360;
+  const L = toRad((q + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) % 360);
+  const e = toRad(23.439 - 0.0000004 * D);
+  const sinDec = Math.sin(e) * Math.sin(L);
+  const dec = Math.asin(sinDec);
+  const RA = Math.atan2(Math.cos(e) * Math.sin(L), Math.cos(L));
+  const GMST = (18.697374558 + 24.06570982441908 * D) % 24;
+  const LMST = (GMST + lng / 15) % 24;
+  const HA = toRad((LMST - toDeg(RA) / 15) * 15);
+
+  const phi = toRad(lat);
+  const sinAlt = Math.sin(phi) * sinDec + Math.cos(phi) * Math.cos(dec) * Math.cos(HA);
+  const altitude = toDeg(Math.asin(sinAlt));
+  const cosAz = (sinDec - Math.sin(phi) * sinAlt) / (Math.cos(phi) * Math.cos(Math.asin(sinAlt)));
+  let azimuth = toDeg(Math.acos(Math.max(-1, Math.min(1, cosAz))));
+  if (Math.sin(HA) > 0) azimuth = 360 - azimuth;
+
+  return { altitude, azimuth, dec: toDeg(dec), ha: toDeg(HA) };
+}
+
+function calcSunriseSunset(lat, lng, date) {
+  const samples = [];
+  for (let h = 0; h < 24.5; h += 0.25) {
+    const d = new Date(date.getTime());
+    d.setUTCHours(Math.floor(h), Math.round((h % 1) * 60), 0, 0);
+    const pos = calcSunPosition(lat, lng, d);
+    samples.push({ h, alt: pos.altitude, az: pos.azimuth });
+  }
+  let rise = null, set = null;
+  for (let i = 1; i < samples.length; i++) {
+    if (samples[i-1].alt < 0 && samples[i].alt >= 0 && rise === null) rise = samples[i].h;
+    if (samples[i-1].alt >= 0 && samples[i].alt < 0 && set === null) set = samples[i].h;
+  }
+  return { rise, set, samples };
+}
+
+function formatHour(h) {
+  if (h === null || h === undefined) return 'N/A';
+  const hr = Math.floor(h);
+  const min = Math.round((h - hr) * 60);
+  return `${String(hr).padStart(2,'0')}:${String(min).padStart(2,'0')} UTC`;
+}
+
+function azimuthDir(az) {
+  const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  return dirs[Math.round(az / 22.5) % 16];
+}
+
+function calcShadowLen(altitude, objectHeight) {
+  if (altitude <= 0) return null;
+  return objectHeight / Math.tan(toRad(altitude));
+}
+
+function getConfidence(s, results) {
+  let score = 0;
+  const notes = [];
+  if (s.lat !== null && s.lng !== null) score += 30;
+  else notes.push('Coordinates missing or invalid');
+
+  if (s.date && s.time) score += 25;
+  else notes.push('Date or time missing');
+
+  if (s.includeShadow && s.shadowLength && s.objectHeight) {
+    score += 35;
+  } else if (!s.includeShadow) {
+    notes.push('Shadow measurement not provided. Confidence limited to solar position only.');
+  } else {
+    notes.push('Shadow values incomplete');
+  }
+
+  if (results && results.altitude < 0) {
+    notes.push('Sun is below horizon at the supplied moment. Cross-check the time zone.');
+  }
+
+  if (score >= 80) return { level: 'HIGH', cls: 'high', score, notes };
+  if (score >= 50) return { level: 'MODERATE', cls: 'mid', score, notes };
+  return { level: 'LOW', cls: 'low', score, notes };
+}
+
+/* ===== CALCULATE ===== */
+function calculate() {
+  state.error = null;
+  els.errorSlot.innerHTML = '';
+
+  try {
+    const lat = state.lat, lng = state.lng;
+    if (lat === null || lng === null) throw new Error('Coordinates required');
+
+    const [year, month, day] = state.date.split('-').map(Number);
+    const [hour, min] = state.time.split(':').map(Number);
+    const offsetH = state.timezone || 0;
+
+    // Convert local moment to UTC. fractional offsets handled.
+    const localMs = Date.UTC(year, month - 1, day, hour, min, 0);
+    const utcMs = localMs - (offsetH * 3600 * 1000);
+    const date = new Date(utcMs);
+
+    const pos = calcSunPosition(lat, lng, date);
+    const { rise, set, samples } = calcSunriseSunset(lat, lng, date);
+
+    state.results = {
+      altitude: pos.altitude,
+      azimuth: ((pos.azimuth % 360) + 360) % 360,
+      dec: pos.dec,
+      ha: pos.ha,
+      sunrise: rise,
+      sunset: set,
+      noon: rise !== null && set !== null ? (rise + set) / 2 : null,
+      utcDate: date,
+      samples,
+    };
+
+    renderResults();
+    if (typeof scrollParentToTop === 'function') setTimeout(scrollParentToTop, 50);
+  } catch (e) {
+    state.error = e.message;
+    els.errorSlot.innerHTML = `<div class="error-msg">ERROR · ${e.message}</div>`;
+  }
+}
+
+/* ===== RENDER RESULTS ===== */
+function renderResults() {
+  const r = state.results;
+  const conf = getConfidence(state, r);
+
+  const altStr = r.altitude.toFixed(2) + '°';
+  const azStr = r.azimuth.toFixed(2) + '° ' + azimuthDir(r.azimuth);
+  const decStr = r.dec.toFixed(4) + '°';
+  const haStr = r.ha.toFixed(4) + '°';
+
+  const shadowCalc = state.includeShadow && state.objectHeight && state.shadowLength
+    ? calcShadowLen(r.altitude, parseFloat(state.objectHeight))
+    : null;
+  const shadowMatch = shadowCalc !== null
+    ? Math.abs(shadowCalc - parseFloat(state.shadowLength)) < parseFloat(state.shadowLength) * 0.15
+    : null;
+
+  const now = new Date();
+  const genDate = now.toISOString().split('T')[0];
+  const genTime = now.toISOString().split('T')[1].slice(0, 5) + ' UTC';
+
+  els.resultMeta.textContent = `Computed ${genDate} · v0.1`;
+
+  const reportText = buildReport(r, conf, shadowCalc, shadowMatch, genDate, genTime);
+  // Escape backticks for safe template embedding
+  const reportTextEsc = reportText.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+
+  els.resultsSlot.innerHTML = `
+    <div class="results">
+
+      <!-- Metric strip -->
+      <div class="metrics-grid">
+        <div class="metric-cell">
+          <div class="metric-label">Sun altitude</div>
+          <div class="metric-value">${r.altitude.toFixed(1)}°</div>
+          <div class="metric-sub">${r.altitude > 0 ? 'Above horizon' : 'Below horizon'}</div>
+        </div>
+        <div class="metric-cell">
+          <div class="metric-label">Sun azimuth</div>
+          <div class="metric-value">${r.azimuth.toFixed(1)}°</div>
+          <div class="metric-sub">${azimuthDir(r.azimuth)} · ${r.azimuth < 180 ? 'AM half' : 'PM half'}</div>
+        </div>
+        <div class="metric-cell">
+          <div class="metric-label">Sunrise</div>
+          <div class="metric-value compact">${formatHour(r.sunrise)}</div>
+          <div class="metric-sub">UTC at this date</div>
+        </div>
+        <div class="metric-cell">
+          <div class="metric-label">Sunset</div>
+          <div class="metric-value compact">${formatHour(r.sunset)}</div>
+          <div class="metric-sub">UTC at this date</div>
+        </div>
+      </div>
+
+      <!-- Sun position diagram -->
+      <div class="result-panel">
+        <div class="result-panel-head">
+          <span class="name">Sun position diagram</span>
+          <span class="meta">${state.date} · ${state.time}${state.timezone === 0 ? ' UTC' : ' local (UTC' + (state.timezone >= 0 ? '+' : '') + state.timezone + ')'}</span>
+        </div>
+        <div class="result-panel-body">
+          ${renderSunDiagram(r.altitude, r.azimuth)}
+        </div>
+      </div>
+
+      <!-- 24-hour arc -->
+      <div class="result-panel">
+        <div class="result-panel-head">
+          <span class="name">24-hour solar arc</span>
+          <span class="meta">Altitude over UTC day</span>
+        </div>
+        <div class="result-panel-body">
+          ${renderArcDiagram(r)}
+        </div>
+      </div>
+
+      <!-- Result map -->
+      <div class="result-panel">
+        <div class="result-panel-head">
+          <span class="name">Analysed location</span>
+          <span class="meta">${state.lat.toFixed(4)}°, ${state.lng.toFixed(4)}°</span>
+        </div>
+        <div id="resultMap"></div>
+      </div>
+
+      ${shadowCalc !== null ? `
+        <div class="result-panel">
+          <div class="result-panel-head">
+            <span class="name">Shadow verification</span>
+            <span class="pill ${shadowMatch ? 'high' : 'low'}">${shadowMatch ? 'CONSISTENT' : 'DISCREPANCY'}</span>
+          </div>
+          <div class="shadow-verify-grid">
+            <div class="shadow-verify-cell">
+              <div class="l">Object height</div>
+              <div class="v">${parseFloat(state.objectHeight).toFixed(2)} m</div>
+            </div>
+            <div class="shadow-verify-cell">
+              <div class="l">Measured shadow</div>
+              <div class="v">${parseFloat(state.shadowLength).toFixed(2)} m</div>
+            </div>
+            <div class="shadow-verify-cell">
+              <div class="l">Calculated shadow</div>
+              <div class="v ${shadowMatch ? 'match' : 'mismatch'}">${shadowCalc.toFixed(2)} m</div>
+            </div>
+          </div>
+        </div>
+      ` : ''}
+
+      <!-- Dossier report -->
+      <div class="result-panel">
+        <div class="result-panel-head">
+          <span class="name">Chronolocation report · dossier</span>
+          <button class="copy-btn" id="copyBtn">Copy</button>
+        </div>
+        <div class="report-body" id="reportBody">${renderReportHtml(r, conf, shadowCalc, shadowMatch, genDate, genTime, decStr, haStr, altStr, azStr)}</div>
+        <div class="confidence-block">
+          <div class="confidence-row">
+            <span class="confidence-label">Confidence assessment</span>
+            <span class="pill ${conf.cls}">${conf.level}</span>
+          </div>
+          ${conf.notes.length > 0 ? `
+            <div class="conf-notes">
+              ${conf.notes.map(n => `<div class="conf-note">${n}</div>`).join('')}
+            </div>
+          ` : ''}
+        </div>
+      </div>
+
+      <div class="reset-row">
+        <button class="btn-ghost" id="resetBtn">New calculation</button>
+      </div>
+
+    </div>
+  `;
+
+  // Bind copy + reset
+  document.getElementById('copyBtn').addEventListener('click', (e) => {
+    navigator.clipboard.writeText(reportText).then(() => {
+      e.target.textContent = 'Copied';
+      e.target.classList.add('copied');
+      setTimeout(() => { e.target.textContent = 'Copy'; e.target.classList.remove('copied'); }, 2000);
+    });
+  });
+  document.getElementById('resetBtn').addEventListener('click', resetResults);
+
+  // Initialise the result map
+  initResultMap(r);
+}
+
+function resetResults() {
+  state.results = null;
+  els.resultMeta.textContent = 'Awaiting input';
+  els.resultsSlot.innerHTML = `
+    <div class="results-empty">
+      <div class="e-tag">Standby</div>
+      <div class="e-title">Set coordinates and a moment in time. The sun will tell you the rest.</div>
+      <div class="e-desc">Once the form on the left is filled, this panel returns altitude, azimuth, sunrise and sunset, a sun-position diagram, a 24-hour solar arc, the analysed location, and a copy-ready dossier report.</div>
+    </div>
+  `;
+  resultMap = null;
+}
+
+/* ===== SUN POSITION DIAGRAM (compass + altitude) ===== */
+function renderSunDiagram(altitude, azimuth) {
+  const W = 720, H = 320;
+  const cx = W / 2;
+  const cy = H - 50;
+  const arcR = Math.min(W * 0.42, H - 80);
+
+  // sun position on the dome: angle from horizon = altitude, compass bearing = azimuth
+  const sunAbove = altitude > 0;
+  const sunAlt = Math.max(0, Math.min(90, altitude));
+  // map: x driven by sin(azimuth), y by cos(altitude)*scaled
+  const azRad = toRad(azimuth);
+  const altRad = toRad(sunAlt);
+  const sunX = cx + Math.sin(azRad) * arcR * Math.cos(altRad);
+  const sunY = cy - Math.sin(altRad) * arcR;
+
+  // Below horizon: place dimmed marker just below
+  const belowSunX = cx + Math.sin(azRad) * arcR * 0.5;
+  const belowSunY = cy + 18;
+
+  return `
+    <svg viewBox="0 0 ${W} ${H}" class="diagram-svg" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <radialGradient id="sunGlow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#E89D3C" stop-opacity="0.7"/>
+          <stop offset="100%" stop-color="#E89D3C" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+
+      <!-- Compass ring outer -->
+      <ellipse cx="${cx}" cy="${cy}" rx="${arcR}" ry="${arcR * 0.18}" fill="none" stroke="#1F2937" stroke-width="1"/>
+
+      <!-- Dome curve -->
+      <path d="M ${cx - arcR} ${cy} A ${arcR} ${arcR} 0 0 1 ${cx + arcR} ${cy}"
+        fill="none" stroke="#1F2937" stroke-width="1" stroke-dasharray="3 4"/>
+
+      <!-- Horizon line -->
+      <line x1="20" y1="${cy}" x2="${W - 20}" y2="${cy}"
+        stroke="#2D3B4F" stroke-width="1"/>
+
+      <!-- Compass tick marks at every 45 degrees -->
+      ${[0, 45, 90, 135, 180, 225, 270, 315].map(a => {
+        const r = toRad(a);
+        const x = cx + Math.sin(r) * arcR;
+        const y = cy + Math.cos(r) * arcR * 0.18;
+        return `<circle cx="${x}" cy="${y}" r="2" fill="#4A5564"/>`;
+      }).join('')}
+
+      <!-- Cardinal labels -->
+      <text x="${cx}" y="${cy + 36}" text-anchor="middle" fill="#6B7888"
+        font-family="JetBrains Mono, monospace" font-size="10" letter-spacing="2">S</text>
+      <text x="${cx}" y="${cy - arcR - 6}" text-anchor="middle" fill="#6B7888"
+        font-family="JetBrains Mono, monospace" font-size="10" letter-spacing="2">N</text>
+      <text x="${cx + arcR + 16}" y="${cy + 4}" text-anchor="start" fill="#6B7888"
+        font-family="JetBrains Mono, monospace" font-size="10" letter-spacing="2">E</text>
+      <text x="${cx - arcR - 16}" y="${cy + 4}" text-anchor="end" fill="#6B7888"
+        font-family="JetBrains Mono, monospace" font-size="10" letter-spacing="2">W</text>
+
+      <!-- Zenith marker -->
+      <text x="${cx + 6}" y="${cy - arcR + 4}" fill="#4A5564"
+        font-family="JetBrains Mono, monospace" font-size="9" letter-spacing="1.5">ZENITH</text>
+
+      ${sunAbove ? `
+        <!-- Vertical drop line -->
+        <line x1="${sunX}" y1="${cy}" x2="${sunX}" y2="${sunY}"
+          stroke="#E89D3C" stroke-width="0.5" stroke-dasharray="2 3" opacity="0.5"/>
+        <!-- Sun glow -->
+        <circle cx="${sunX}" cy="${sunY}" r="28" fill="url(#sunGlow)"/>
+        <!-- Sun -->
+        <circle cx="${sunX}" cy="${sunY}" r="9" fill="#E89D3C"/>
+        <circle cx="${sunX}" cy="${sunY}" r="14" fill="none" stroke="#E89D3C" stroke-width="1" opacity="0.6"/>
+        <!-- Altitude readout -->
+        <text x="${sunX + 18}" y="${sunY - 4}" fill="#E89D3C"
+          font-family="JetBrains Mono, monospace" font-size="11" font-weight="500">
+          ${altitude.toFixed(1)}°
+        </text>
+        <text x="${sunX + 18}" y="${sunY + 9}" fill="#B0B8C5"
+          font-family="JetBrains Mono, monospace" font-size="9" letter-spacing="1">
+          alt
+        </text>
+        <!-- Azimuth readout below horizon -->
+        <text x="${sunX}" y="${cy + 18}" text-anchor="middle" fill="#32BB93"
+          font-family="JetBrains Mono, monospace" font-size="10" font-weight="500">
+          ${azimuth.toFixed(0)}° ${azimuthDir(azimuth)}
+        </text>
+      ` : `
+        <circle cx="${belowSunX}" cy="${belowSunY}" r="8"
+          fill="none" stroke="#4A5564" stroke-width="1" stroke-dasharray="2 2"/>
+        <text x="${cx}" y="${cy - 24}" text-anchor="middle"
+          fill="#6B7888" font-family="JetBrains Mono, monospace" font-size="11" letter-spacing="1.5">
+          SUN BELOW HORIZON
+        </text>
+        <text x="${cx}" y="${cy + 22}" text-anchor="middle" fill="#6B7888"
+          font-family="JetBrains Mono, monospace" font-size="10" letter-spacing="1">
+          ${azimuth.toFixed(0)}° ${azimuthDir(azimuth)} · ${altitude.toFixed(1)}°
+        </text>
+      `}
+    </svg>
+  `;
+}
+
+/* ===== 24-HOUR ARC DIAGRAM ===== */
+function renderArcDiagram(r) {
+  const W = 720, H = 220;
+  const padL = 50, padR = 30, padT = 20, padB = 40;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+  const samples = r.samples || [];
+
+  if (samples.length === 0) return '';
+
+  // Y range: roughly -30 to 90
+  const yMin = -30, yMax = 90;
+  const xToPx = (h) => padL + (h / 24) * plotW;
+  const yToPx = (alt) => padT + (1 - (alt - yMin) / (yMax - yMin)) * plotH;
+
+  // Build the polyline
+  const pts = samples.map(s => `${xToPx(s.h).toFixed(1)},${yToPx(s.alt).toFixed(1)}`).join(' ');
+
+  // Build a filled area beneath where alt > 0
+  let areaPath = '';
+  let above = false;
+  let pathPts = [];
+  samples.forEach((s, i) => {
+    if (s.alt >= 0) {
+      if (!above) {
+        pathPts.push(`M ${xToPx(s.h).toFixed(1)},${yToPx(0).toFixed(1)}`);
+        above = true;
+      }
+      pathPts.push(`L ${xToPx(s.h).toFixed(1)},${yToPx(s.alt).toFixed(1)}`);
+    } else if (above) {
+      pathPts.push(`L ${xToPx(s.h).toFixed(1)},${yToPx(0).toFixed(1)} Z`);
+      above = false;
+    }
+  });
+  if (above) {
+    const last = samples[samples.length - 1];
+    pathPts.push(`L ${xToPx(last.h).toFixed(1)},${yToPx(0).toFixed(1)} Z`);
+  }
+  areaPath = pathPts.join(' ');
+
+  // Time-of-input marker
+  const inputUtcHour = r.utcDate.getUTCHours() + r.utcDate.getUTCMinutes() / 60;
+  const inputX = xToPx(inputUtcHour);
+  const inputY = yToPx(r.altitude);
+
+  // Y-axis ticks
+  const yTicks = [-30, 0, 30, 60, 90];
+  const xTicks = [0, 6, 12, 18, 24];
+
+  return `
+    <svg viewBox="0 0 ${W} ${H}" class="diagram-svg" preserveAspectRatio="xMidYMid meet">
+      <!-- Plot background -->
+      <rect x="${padL}" y="${padT}" width="${plotW}" height="${plotH}" fill="#0A0E14" stroke="#1F2937" stroke-width="0.5"/>
+
+      <!-- Horizon zero-line -->
+      <line x1="${padL}" y1="${yToPx(0)}" x2="${padL + plotW}" y2="${yToPx(0)}"
+        stroke="#2D3B4F" stroke-width="1"/>
+      <text x="${padL - 8}" y="${yToPx(0) + 3}" text-anchor="end"
+        fill="#6B7888" font-family="JetBrains Mono, monospace" font-size="9">HORIZON</text>
+
+      <!-- Y ticks -->
+      ${yTicks.map(t => t === 0 ? '' : `
+        <line x1="${padL}" y1="${yToPx(t)}" x2="${padL + plotW}" y2="${yToPx(t)}"
+          stroke="#1F2937" stroke-width="0.5" stroke-dasharray="2 4"/>
+        <text x="${padL - 8}" y="${yToPx(t) + 3}" text-anchor="end"
+          fill="#4A5564" font-family="JetBrains Mono, monospace" font-size="9">${t}°</text>
+      `).join('')}
+
+      <!-- Filled daylight area -->
+      <path d="${areaPath}" fill="rgba(232, 157, 60, 0.08)"/>
+
+      <!-- Solar curve -->
+      <polyline points="${pts}" fill="none" stroke="#E89D3C" stroke-width="1.5" opacity="0.85"/>
+
+      <!-- Sunrise marker -->
+      ${r.sunrise !== null ? `
+        <line x1="${xToPx(r.sunrise)}" y1="${yToPx(0)}" x2="${xToPx(r.sunrise)}" y2="${padT}"
+          stroke="#32BB93" stroke-width="0.5" stroke-dasharray="2 3" opacity="0.5"/>
+        <circle cx="${xToPx(r.sunrise)}" cy="${yToPx(0)}" r="3" fill="#32BB93"/>
+        <text x="${xToPx(r.sunrise)}" y="${padT + 12}" text-anchor="middle"
+          fill="#32BB93" font-family="JetBrains Mono, monospace" font-size="9">SR ${formatHour(r.sunrise).slice(0, 5)}</text>
+      ` : ''}
+
+      <!-- Sunset marker -->
+      ${r.sunset !== null ? `
+        <line x1="${xToPx(r.sunset)}" y1="${yToPx(0)}" x2="${xToPx(r.sunset)}" y2="${padT}"
+          stroke="#32BB93" stroke-width="0.5" stroke-dasharray="2 3" opacity="0.5"/>
+        <circle cx="${xToPx(r.sunset)}" cy="${yToPx(0)}" r="3" fill="#32BB93"/>
+        <text x="${xToPx(r.sunset)}" y="${padT + 12}" text-anchor="middle"
+          fill="#32BB93" font-family="JetBrains Mono, monospace" font-size="9">SS ${formatHour(r.sunset).slice(0, 5)}</text>
+      ` : ''}
+
+      <!-- Solar noon marker -->
+      ${r.noon !== null ? `
+        <line x1="${xToPx(r.noon)}" y1="${yToPx(0)}" x2="${xToPx(r.noon)}" y2="${padT + 26}"
+          stroke="#4A5564" stroke-width="0.5" stroke-dasharray="2 3"/>
+      ` : ''}
+
+      <!-- Input moment marker -->
+      <line x1="${inputX}" y1="${padT}" x2="${inputX}" y2="${padT + plotH}"
+        stroke="#32BB93" stroke-width="1" opacity="0.4"/>
+      <circle cx="${inputX}" cy="${inputY}" r="6" fill="#32BB93" opacity="0.25"/>
+      <circle cx="${inputX}" cy="${inputY}" r="3.5" fill="#32BB93"/>
+      <text x="${inputX + 8}" y="${inputY - 6}" fill="#32BB93"
+        font-family="JetBrains Mono, monospace" font-size="10" font-weight="500">
+        ${r.altitude.toFixed(1)}°
+      </text>
+
+      <!-- X axis ticks -->
+      ${xTicks.map(h => `
+        <line x1="${xToPx(h)}" y1="${padT + plotH}" x2="${xToPx(h)}" y2="${padT + plotH + 4}"
+          stroke="#4A5564" stroke-width="0.5"/>
+        <text x="${xToPx(h)}" y="${padT + plotH + 16}" text-anchor="middle"
+          fill="#6B7888" font-family="JetBrains Mono, monospace" font-size="9">${String(h).padStart(2, '0')}:00</text>
+      `).join('')}
+
+      <text x="${padL + plotW / 2}" y="${H - 4}" text-anchor="middle"
+        fill="#4A5564" font-family="JetBrains Mono, monospace" font-size="9" letter-spacing="1.5">
+        UTC HOUR
+      </text>
+    </svg>
+  `;
+}
+
+/* ===== RESULT MAP ===== */
+function initResultMap(r) {
+  const container = document.getElementById('resultMap');
+  if (!container) return;
+  if (typeof L === 'undefined') {
+    showMapFallback('resultMap', 'MAP UNAVAILABLE', 'Coordinates: ' + state.lat.toFixed(4) + ', ' + state.lng.toFixed(4));
+    return;
+  }
+
+  try {
+    resultMap = L.map('resultMap', {
+      center: [state.lat, state.lng],
+      zoom: 13,
+      zoomControl: true,
+      attributionControl: true
+    });
+
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap contributors',
+      crossOrigin: true
+    }).addTo(resultMap);
+
+    // Fixed pin at the analysed location
+    const pinIcon = L.divIcon({
+      className: '',
+      html: '<div class="ss-pin locked"></div>',
+      iconSize: [16, 16],
+      iconAnchor: [8, 8]
+    });
+    L.marker([state.lat, state.lng], { icon: pinIcon, interactive: false }).addTo(resultMap);
+
+    // Sun-direction line if sun is up
+    if (r.altitude > 0) {
+      const distM = 500;
+      const earthR = 6378137;
+      const bearing = toRad(r.azimuth);
+      const lat1 = toRad(state.lat);
+      const lat2 = Math.asin(Math.sin(lat1) * Math.cos(distM / earthR) +
+        Math.cos(lat1) * Math.sin(distM / earthR) * Math.cos(bearing));
+      const lng2offset = Math.atan2(
+        Math.sin(bearing) * Math.sin(distM / earthR) * Math.cos(lat1),
+        Math.cos(distM / earthR) - Math.sin(lat1) * Math.sin(lat2)
+      );
+      const sunLat = toDeg(lat2);
+      const sunLng = state.lng + toDeg(lng2offset);
+
+      L.polyline(
+        [[state.lat, state.lng], [sunLat, sunLng]],
+        { color: '#E89D3C', weight: 2, opacity: 0.9, dashArray: '6 4' }
+      ).addTo(resultMap);
+
+      const sunIcon = L.divIcon({
+        className: '',
+        html: '<div class="ss-sun"></div>',
+        iconSize: [14, 14],
+        iconAnchor: [7, 7]
+      });
+      L.marker([sunLat, sunLng], { icon: sunIcon, interactive: false }).addTo(resultMap);
+    }
+
+    // Force a resize after the panel renders, in case the container was 0px tall during init
+    setTimeout(() => { if (resultMap) resultMap.invalidateSize(); }, 100);
+  } catch (err) {
+    console.error('[SIG-TLS-002] Result map init failed:', err);
+    resultMap = null;
+    showMapFallback('resultMap', 'MAP UNAVAILABLE', 'Could not start the map (' + (err.message || 'unknown error') + '). Coordinates: ' + state.lat.toFixed(4) + ', ' + state.lng.toFixed(4));
+  }
+}
+
+/* ===== REPORT BUILDERS ===== */
+function buildReport(r, conf, shadowCalc, shadowMatch, genDate, genTime) {
+  const hr = '─'.repeat(56);
+  return `CHRONOLOCATION ANALYSIS REPORT
+${hr}
+CASE REFERENCE:  [INSERT CASE ID]
+GENERATED:       ${genDate} ${genTime}
+TOOL:            SIG-TLS-002 v0.1
+FRAMEWORK:       Signal & Shadow LST-001 v1.0.3
+${hr}
+
+INPUT PARAMETERS
+Coordinates:     ${state.lat.toFixed(6)}, ${state.lng.toFixed(6)} (WGS-84)
+Date:            ${state.date}
+Time:            ${state.time}${state.timezone !== 0 ? ' (local, UTC' + (state.timezone >= 0 ? '+' : '') + state.timezone + ')' : ' UTC'}
+Computed UTC:    ${r.utcDate.toISOString()}
+
+SOLAR POSITION RESULTS
+Sun altitude:    ${r.altitude.toFixed(2)}°
+Sun azimuth:     ${r.azimuth.toFixed(2)}° ${azimuthDir(r.azimuth)}
+Solar declination: ${r.dec.toFixed(4)}°
+Hour angle:      ${r.ha.toFixed(4)}°
+Sunrise (UTC):   ${formatHour(r.sunrise)}
+Solar noon (UTC): ${formatHour(r.noon)}
+Sunset (UTC):    ${formatHour(r.sunset)}
+Day or night:    ${r.altitude > 0 ? 'DAYTIME (sun above horizon)' : 'NIGHT (sun below horizon)'}
+
+FORMULA APPLIED (Meeus / NOAA solar position)
+sin(θs) = sin(φ)·sin(δ) + cos(φ)·cos(δ)·cos(h)
+Where:
+  φ = ${state.lat.toFixed(6)}° (observer latitude)
+  δ = ${r.dec.toFixed(4)}° (solar declination)
+  h = ${r.ha.toFixed(4)}° (local hour angle)
+Result: θs = ${r.altitude.toFixed(2)}°
+${state.includeShadow && state.objectHeight && state.shadowLength ? `
+SHADOW VERIFICATION
+Object height:   ${parseFloat(state.objectHeight).toFixed(2)} m
+Measured shadow: ${parseFloat(state.shadowLength).toFixed(2)} m
+Calculated:      ${shadowCalc !== null ? shadowCalc.toFixed(2) + ' m' : 'N/A (sun below horizon)'}
+Verdict:         ${shadowMatch === null ? 'N/A' : (shadowMatch ? 'CONSISTENT (within 15% tolerance)' : 'DISCREPANCY (outside 15% tolerance)')}
+` : ''}
+CONFIDENCE: ${conf.level}
+${conf.notes.length > 0 ? conf.notes.map(n => '  > ' + n).join('\n') : '  > All primary inputs provided.'}
+
+${hr}
+Tool: signalandshadow.io/chronolocation-calculator
+Standard: signalandshadow.io/verification-standards
+`;
+}
+
+function renderReportHtml(r, conf, shadowCalc, shadowMatch, genDate, genTime, decStr, haStr, altStr, azStr) {
+  const hr = '<span class="hr">' + '─'.repeat(56) + '</span>';
+  const az = azimuthDir(r.azimuth);
+  const shadowSection = state.includeShadow && state.objectHeight && state.shadowLength ? `
+<span class="key">SHADOW VERIFICATION
+Object height:   </span><span class="val">${parseFloat(state.objectHeight).toFixed(2)} m</span><span class="key">
+Measured shadow: </span><span class="val">${parseFloat(state.shadowLength).toFixed(2)} m</span><span class="key">
+Calculated:      </span><span class="val">${shadowCalc !== null ? shadowCalc.toFixed(2) + ' m' : 'N/A'}</span><span class="key">
+Verdict:         </span><span class="val">${shadowMatch === null ? 'N/A' : (shadowMatch ? 'CONSISTENT' : 'DISCREPANCY')}</span>
+` : '';
+
+  return `<span class="key">CHRONOLOCATION ANALYSIS REPORT</span>
+${hr}
+<span class="key">CASE REFERENCE:  </span>[INSERT CASE ID]<span class="key">
+GENERATED:       </span>${genDate} ${genTime}<span class="key">
+TOOL:            </span>SIG-TLS-002 v0.1<span class="key">
+FRAMEWORK:       </span>LST-001 v1.0.3
+${hr}
+
+<span class="key">INPUT PARAMETERS
+Coordinates:     </span><span class="val">${state.lat.toFixed(6)}, ${state.lng.toFixed(6)}</span><span class="key">
+Date:            </span><span class="val">${state.date}</span><span class="key">
+Time:            </span><span class="val">${state.time}${state.timezone !== 0 ? ' (UTC' + (state.timezone >= 0 ? '+' : '') + state.timezone + ')' : ' UTC'}</span>
+
+<span class="key">SOLAR POSITION RESULTS
+Sun altitude:    </span><span class="val">${altStr}</span><span class="key">
+Sun azimuth:     </span><span class="val">${azStr}</span><span class="key">
+Sunrise (UTC):   </span><span class="val">${formatHour(r.sunrise)}</span><span class="key">
+Solar noon:      </span><span class="val">${formatHour(r.noon)}</span><span class="key">
+Sunset (UTC):    </span><span class="val">${formatHour(r.sunset)}</span><span class="key">
+Day or night:    </span><span class="val">${r.altitude > 0 ? 'DAYTIME' : 'NIGHT'}</span>
+
+<span class="key">FORMULA (Meeus / NOAA)</span>
+<span class="formula">sin(θs) = sin(φ)·sin(δ) + cos(φ)·cos(δ)·cos(h)
+φ=${state.lat.toFixed(4)}°  δ=${decStr}  h=${haStr}
+θs = ${altStr}</span>${shadowSection}`;
+}
+
+/* ===== INIT ===== */
+window.addEventListener('error', (e) => {
+  console.error('[SIG-TLS-002] window.onerror:', {
+    message: e.message,
+    source: e.filename,
+    line: e.lineno,
+    col: e.colno,
+    error: e.error,
+    leafletLoaded: typeof L !== 'undefined'
+  });
+});
+
+window.addEventListener('unhandledrejection', (e) => {
+  console.error('[SIG-TLS-002] unhandled promise rejection:', e.reason);
+});
+
+window.addEventListener('load', () => {
+  initPickerMap();
+  refreshCalc();
+});
+
+/* ===== IFRAME PARENT COMMUNICATION =====
+   Matches the convention used by the OSINT Tool Database (sas-tools-* messages).
+   When embedded in an iframe on signalandshadow.io, the parent listens for these
+   and resizes the iframe / scrolls the page accordingly.
+   Safe no-op when loaded standalone (window.parent === window).
+*/
+function sendHeightToParent() {
+  if (window.parent === window) return;
+  const h = Math.max(
+    document.body.scrollHeight,
+    document.documentElement.scrollHeight,
+    document.body.offsetHeight,
+    document.documentElement.offsetHeight
+  );
+  window.parent.postMessage({ type: 'ss-tls-002-height', tool: 'SIG-TLS-002', height: h }, '*');
+}
+
+function scrollParentToTop() {
+  if (window.parent === window) return;
+  window.parent.postMessage({ type: 'ss-tls-002-scroll-to-top', tool: 'SIG-TLS-002' }, '*');
+}
+
+if ('ResizeObserver' in window) {
+  new ResizeObserver(sendHeightToParent).observe(document.body);
+}
+window.addEventListener('load', sendHeightToParent);
+setInterval(sendHeightToParent, 1000);
+</script>
+
+</body>
+</html>
