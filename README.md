@@ -188,7 +188,7 @@ MIT. See [LICENSE](./LICENSE).
 
 If you use this tool in published work:
 
-> Bowler, D. (2026). *Chronolocation Calculator (SIG-TLS-002 v0.1)* [Computer software]. Signal & Shadow. https://signalandshadow.io/chronolocation-calculator
+> *Chronolocation Calculator (SIG-TLS-002 v0.1)* [Computer software]. Signal & Shadow. https://signalandshadow.io/chronolocation-calculator
 
 ---
 
